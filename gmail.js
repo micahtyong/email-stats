@@ -27,8 +27,8 @@ fs.readFile("credentials.json", (err, content) => {
  */
 async function gmailStatsToDB(auth) {
   const user = await getProfile(auth);
-  const rawEmails = await getRawEmails(auth, ["INBOX"]);
-  rawEmails.push(...(await getRawEmails(auth, ["SENT"])));
+  const rawEmails = await getEmailKeys(auth, ["INBOX"]);
+  rawEmails.push(...(await getEmailKeys(auth, ["SENT"])));
   const emails = await getParsedEmails(auth, rawEmails);
   const emailStats = await getEmailStats(user, emails);
   console.log(emailStats);
@@ -75,15 +75,18 @@ async function getEmailStats(user, emails) {
  * 1) Extract domain name
  * 2) Execute shell child process to check host (@source: https://stackabuse.com/executing-shell-commands-with-node-js/)
  * @param {string} emailAddress
+ *
+ * ex) team@calblueprint.org => true
+ * reject(`error: ${error.message}`)
+ * reject(`stderr: ${stderr}`)
  */
 function isGmailHosted(emailAddress) {
-  const domain = emailAddress.match(/(?<=@)[^.]+.(\w+)/g);
-  return new Promise((resolve, reject) => {
+  const domain = emailAddress.match(/(?<=@)[^.]+(.(\w+))*/g);
+  return new Promise((resolve) => {
     if (domain.length) {
       exec(`host ${domain[0]}`, (error, stdout, stderr) => {
-        if (error) reject(`error: ${error.message}`);
-        if (stderr) reject(`stderr: ${stderr}`);
-        console.log(`stdout: ${stdout}`);
+        if (error) resolve(false);
+        if (stderr) resolve(false);
         resolve(stdout.includes("google.com"));
       });
     }
@@ -171,25 +174,22 @@ function getProfile(auth) {
  */
 function getLabels(auth) {
   const gmail = google.gmail({ version: "v1", auth });
-  const emailLabels = [];
-  gmail.users.labels.list(
-    {
-      userId: "me",
-    },
-    (err, res) => {
-      if (err) return console.log("The API returned an error: " + err);
-      const labels = res.data.labels;
-      if (labels.length) {
-        labels.forEach((label) => {
-          console.log(`- ${label.name}`);
-          emailLabels.push(label);
-        });
-      } else {
-        console.log("No labels found.");
+  return new Promise((resolve, reject) => {
+    gmail.users.labels.list(
+      {
+        userId: "me",
+      },
+      (err, res) => {
+        if (err) reject("The API returned an error " + err);
+        const labels = res.data.labels;
+        if (labels) {
+          resolve(labels);
+        } else {
+          resolve([]);
+        }
       }
-    }
-  );
-  return emailLabels;
+    );
+  });
 }
 
 /**
@@ -197,7 +197,7 @@ function getLabels(auth) {
  *
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function getRawEmails(auth, labels) {
+function getEmailKeys(auth, labels) {
   const gmail = google.gmail({ version: "v1", auth });
   const hourAgo = Math.floor(Date.now() / 1000 - 3600);
   return new Promise((resolve, reject) => {
