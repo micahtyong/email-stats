@@ -10,7 +10,6 @@
   "author": "Micah Yong",
   "license": "ISC",
   "dependencies": {
-    "dayjs": "^1.9.5",
     "googleapis": "^39.2.0",
     "typescript": "^4.0.5"
   },
