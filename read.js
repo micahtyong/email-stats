@@ -12,21 +12,27 @@ AWS.config.update(awsConfig);
 
 const docClient = new AWS.DynamoDB.DocumentClient();
 /**
- * Adds or updates DB with new Gmail stats
- * @param {Stats} input Gmail stats object
+ * Fetches Gmail stats from DB
+ * @param {string} time in Unix (seconds) (stringified)
  */
-const write = function (input) {
+const fetchOneByKey = function (time) {
   const params = {
     TableName: "gmail-stats",
-    Item: input,
+    Key: {
+      time: time,
+    },
   };
-  docClient.put(params, function (err, data) {
+  docClient.get(params, function (err, data) {
     if (err) {
-      console.log("gmail-stats::save::error - " + JSON.stringify(err, null, 2));
+      console.log(
+        "gmail-stats::fetchOneByKey::error - " + JSON.stringify(err, null, 2)
+      );
     } else {
-      console.log("gmail-stats::save::success");
+      console.log(
+        "gmail-stats::fetchOneByKey::success - " + JSON.stringify(data, null, 2)
+      );
     }
   });
 };
 
-exports.write = write;
+exports.read = fetchOneByKey;

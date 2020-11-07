@@ -51,6 +51,13 @@ async function gmailStatsToDB(auth) {
   write(input);
 }
 
+/**
+ * Returns the last valid hour that the lambda function can be called.
+ *
+ * ex) It's 7:10 PM.
+ *      getLastHour() returns the Unix timestamp in seconds for 6:00 PM,
+ *      and our API scaper should scan between 6:00 PM and 7:00 PM only.
+ */
 function getLastHour() {
   const mostRecentHour = Math.floor(Date.now() / 1000 / 60 / 60) * 60 * 60;
   return mostRecentHour - 3600;
