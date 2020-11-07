@@ -1,22 +1,26 @@
+"use strict";
 const fs = require("fs");
+const path = require("path");
 const readline = require("readline");
 const { google } = require("googleapis");
 const { exec } = require("child_process");
-const { write } = require("./write");
+const { write } = require(__dirname + "/dynamo/write");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 // The file token.json stores the user's access and refresh tokens, and is
 // created automatically when the authorization flow completes for the first
 // time.
-const TOKEN_PATH = "token.json";
+const TOKEN_PATH = __dirname + "/token.json";
 
-// Load client secrets from a local file.
-fs.readFile("credentials.json", (err, content) => {
-  if (err) return console.log("Error loading client secret file:", err);
-  // Authorize a client with credentials, then call the Gmail API.
-  authorize(JSON.parse(content), gmailStatsToDB);
-});
+exports.handler = () => {
+  // Load client secrets from a local file.
+  fs.readFile(__dirname + "/credentials.json", (err, content) => {
+    if (err) return console.log("Error loading client secret file:", err);
+    // Authorize a client with credentials, then call the Gmail API.
+    authorize(JSON.parse(content), gmailStatsToDB);
+  });
+};
 
 /**
  * Main Lambda function
@@ -29,8 +33,6 @@ async function gmailStatsToDB(auth) {
 
   // 1) Collect email keys from the preceding hour
   const pastHour = getLastHour();
-  console.log(pastHour);
-
   const rawEmails = await getEmailKeys(auth, ["INBOX"], pastHour);
   rawEmails.push(...(await getEmailKeys(auth, ["SENT"], pastHour)));
 
@@ -39,7 +41,6 @@ async function gmailStatsToDB(auth) {
 
   // 3) Extract metrics from emails
   const emailStats = await getEmailStats(user, emails);
-  console.log(pastHour, emails, emailStats);
 
   // 4) Write to DB
   const input = {
@@ -310,3 +311,5 @@ function parseEmail(auth, rawEmail) {
     );
   });
 }
+
+exports.handler();

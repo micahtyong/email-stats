@@ -5,8 +5,8 @@ dotenv.config();
 const awsConfig = {
   region: "us-east-1",
   endpoint: "http://dynamodb.us-east-1.amazonaws.com",
-  accessKeyId: process.env.AWS_ACCESS_KEY,
-  secretAccessKey: process.env.AWS_SECRET_KEY,
+  accessKeyId: process.env.AWS_DB_ACCESS_KEY,
+  secretAccessKey: process.env.AWS_DB_SECRET_KEY,
 };
 AWS.config.update(awsConfig);
 
@@ -24,7 +24,9 @@ const write = function (input) {
     if (err) {
       console.log("gmail-stats::save::error - " + JSON.stringify(err, null, 2));
     } else {
-      console.log("gmail-stats::save::success");
+      console.log(
+        "gmail-stats::save::success - " + JSON.stringify(data, null, 2)
+      );
     }
   });
 };
