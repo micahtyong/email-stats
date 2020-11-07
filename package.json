@@ -4,7 +4,7 @@
   "description": "Lambda function for fetching Gmail data",
   "main": "gmail.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "tsc": "tsc"
   },
   "author": "Micah Yong",
@@ -16,6 +16,7 @@
     "typescript": "^4.0.5"
   },
   "devDependencies": {
-    "@types/node": "^14.14.6"
+    "@types/node": "^14.14.6",
+    "jest": "^26.6.3"
   }
 }

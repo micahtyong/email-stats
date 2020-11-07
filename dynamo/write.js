@@ -20,14 +20,18 @@ const write = function (input) {
     TableName: "gmail-stats",
     Item: input,
   };
-  docClient.put(params, function (err, data) {
-    if (err) {
-      console.log("gmail-stats::save::error - " + JSON.stringify(err, null, 2));
-    } else {
-      console.log(
-        "gmail-stats::save::success - " + JSON.stringify(data, null, 2)
+  return new Promise((resolve, reject) => {
+    if (!input.hasOwnProperty("time"))
+      return reject("gmail-stats::save::inputError - no 'time' attribute");
+    if (!(typeof input.time === "string"))
+      return reject(
+        "gmail-stats::save::inputError - 'time' attribute of type " +
+          typeof input.time
       );
-    }
+    docClient.put(params, function (err) {
+      if (err) reject("gmail-stats::save::error - " + err);
+      resolve("gmail-stats::save::success");
+    });
   });
 };
 

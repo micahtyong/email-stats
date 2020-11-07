@@ -19,6 +19,7 @@ exports.handler = () => {
     if (err) return console.log("Error loading client secret file:", err);
     // Authorize a client with credentials, then call the Gmail API.
     authorize(JSON.parse(content), gmailStatsToDB);
+    return true;
   });
 };
 
@@ -49,7 +50,7 @@ async function gmailStatsToDB(auth) {
     isDeleted: false,
     time: pastHour.toString(),
   };
-  write(input);
+  await write(input);
 }
 
 /**

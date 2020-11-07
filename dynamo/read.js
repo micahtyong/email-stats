@@ -5,8 +5,8 @@ dotenv.config();
 const awsConfig = {
   region: "us-east-1",
   endpoint: "http://dynamodb.us-east-1.amazonaws.com",
-  accessKeyId: process.env.AWS_ACCESS_KEY,
-  secretAccessKey: process.env.AWS_SECRET_KEY,
+  accessKeyId: process.env.AWS_DB_ACCESS_KEY,
+  secretAccessKey: process.env.AWS_DB_SECRET_KEY,
 };
 AWS.config.update(awsConfig);
 
@@ -22,16 +22,16 @@ const fetchOneByKey = function (time) {
       time: time,
     },
   };
-  docClient.get(params, function (err, data) {
-    if (err) {
-      console.log(
-        "gmail-stats::fetchOneByKey::error - " + JSON.stringify(err, null, 2)
+  return new Promise((resolve, reject) => {
+    if (typeof time !== "string")
+      return reject(
+        "gmail-stats::fetchOneByKey::invalidInput - " + typeof time
       );
-    } else {
-      console.log(
-        "gmail-stats::fetchOneByKey::success - " + JSON.stringify(data, null, 2)
-      );
-    }
+    docClient.get(params, function (err, data) {
+      if (err) return reject("gmail-stats::fetchOneByKey::error - " + err);
+      if (!data.Item) return reject("gmail-stats::fetchOneByKey::keyNotFound");
+      resolve(data.Item);
+    });
   });
 };
 
