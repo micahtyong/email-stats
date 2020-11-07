@@ -1,6 +1,5 @@
 "use strict";
 const fs = require("fs");
-const path = require("path");
 const readline = require("readline");
 const { google } = require("googleapis");
 const { exec } = require("child_process");
@@ -50,7 +49,9 @@ async function gmailStatsToDB(auth) {
     isDeleted: false,
     time: pastHour.toString(),
   };
-  await write(input);
+  write(input)
+    .then((res) => console.log(res))
+    .catch((e) => console.log(e));
 }
 
 /**
@@ -191,7 +192,9 @@ function getProfile(auth) {
       },
       (err, res) => {
         if (err)
-          reject("The API returned an error while fetching user: " + err);
+          return reject(
+            "The API returned an error while fetching user: " + err
+          );
         resolve(res.data);
       }
     );
@@ -211,7 +214,7 @@ function getLabels(auth) {
         userId: "me",
       },
       (err, res) => {
-        if (err) reject("The API returned an error " + err);
+        if (err) return reject("The API returned an error " + err);
         const labels = res.data.labels;
         if (labels) {
           resolve(labels);
@@ -238,7 +241,7 @@ function getEmailKeys(auth, labels, hourAgo) {
         labelIds: labels,
       },
       (err, res) => {
-        if (err) reject("The API returned an error " + err);
+        if (err) return reject("The API returned an error " + err);
         const messages = res.data.messages;
         if (messages) {
           resolve(messages);
@@ -284,7 +287,7 @@ function parseEmail(auth, rawEmail) {
         id: rawEmail["id"],
       },
       (err, res) => {
-        if (err) reject("The email is invalid: " + err);
+        if (err) return reject("The email is invalid: " + err);
         const email = {
           id: res.data.id,
           snippet: res.data.snippet,
