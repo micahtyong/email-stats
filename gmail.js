@@ -2,6 +2,7 @@ const fs = require("fs");
 const readline = require("readline");
 const { google } = require("googleapis");
 const { exec } = require("child_process");
+const { write } = require("./write");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
@@ -18,20 +19,41 @@ fs.readFile("credentials.json", (err, content) => {
 });
 
 /**
- * Main Lambda function to
- * 0) Get user profile information
- * 1) Collect emails from the preceding hour
- * 2) Format emails
- * 3) Extract metrics from emails
+ * Main Lambda function
+ *
  * @param {google.auth.OAuth2} auth
  */
 async function gmailStatsToDB(auth) {
+  // 0) Get user profile information
   const user = await getProfile(auth);
-  const rawEmails = await getEmailKeys(auth, ["INBOX"]);
-  rawEmails.push(...(await getEmailKeys(auth, ["SENT"])));
+
+  // 1) Collect email keys from the preceding hour
+  const pastHour = getLastHour();
+  console.log(pastHour);
+
+  const rawEmails = await getEmailKeys(auth, ["INBOX"], pastHour);
+  rawEmails.push(...(await getEmailKeys(auth, ["SENT"], pastHour)));
+
+  // 2) Format emails
   const emails = await getParsedEmails(auth, rawEmails);
+
+  // 3) Extract metrics from emails
   const emailStats = await getEmailStats(user, emails);
-  console.log(emailStats);
+  console.log(pastHour, emails, emailStats);
+
+  // 4) Write to DB
+  const input = {
+    ...emailStats,
+    email: user.emailAddress,
+    isDeleted: false,
+    time: pastHour.toString(),
+  };
+  write(input);
+}
+
+function getLastHour() {
+  const mostRecentHour = Math.floor(Date.now() / 1000 / 60 / 60) * 60 * 60;
+  return mostRecentHour - 3600;
 }
 
 /**
@@ -45,10 +67,10 @@ async function gmailStatsToDB(auth) {
  */
 async function getEmailStats(user, emails) {
   const stats = {
-    ToMeFromGmail: 0,
-    ToMeFromNonGmail: 0,
-    FromMeToGmail: 0,
-    FromMeToNonGmail: 0,
+    toMeFromGmail: 0,
+    toMeFromNonGmail: 0,
+    fromMeToGmail: 0,
+    fromMeToNonGmail: 0,
   };
   for (const email of emails) {
     const sentToMe = email.to.includes(user.emailAddress);
@@ -58,13 +80,13 @@ async function getEmailStats(user, emails) {
     const toGmail =
       email.to.includes("gmail.com") || (await isGmailHosted(email.to));
     if (sentToMe && fromGmail) {
-      stats.ToMeFromGmail += 1;
+      stats.toMeFromGmail += 1;
     } else if (sentToMe && !fromGmail) {
-      stats.ToMeFromNonGmail += 1;
+      stats.toMeFromNonGmail += 1;
     } else if (sentFromMe && toGmail) {
-      stats.FromMeToGmail += 1;
+      stats.fromMeToGmail += 1;
     } else {
-      stats.FromMeToNonGmail += 1;
+      stats.fromMeToNonGmail += 1;
     }
   }
   return stats;
@@ -197,9 +219,8 @@ function getLabels(auth) {
  *
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function getEmailKeys(auth, labels) {
+function getEmailKeys(auth, labels, hourAgo) {
   const gmail = google.gmail({ version: "v1", auth });
-  const hourAgo = Math.floor(Date.now() / 1000 - 3600);
   return new Promise((resolve, reject) => {
     gmail.users.messages.list(
       {
