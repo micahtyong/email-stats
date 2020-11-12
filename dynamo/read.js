@@ -29,10 +29,29 @@ const fetchOneByKey = function (time) {
       );
     docClient.get(params, function (err, data) {
       if (err) return reject("gmail-stats::fetchOneByKey::error - " + err);
+      console.log(data);
       if (!data.Item) return reject("gmail-stats::fetchOneByKey::keyNotFound");
       resolve(data.Item);
     });
   });
 };
 
+/**
+ * Fetches last 24 hours of Gmail data
+ */
+const dayRangeScan = function () {
+  const params = {
+    TableName: "gmail-stats",
+    Limit: 24,
+  };
+  return new Promise((resolve, reject) => {
+    docClient.scan(params, function (err, data) {
+      if (err) return reject("gmail-stats::fetchOneByKey::error - " + err);
+      if (!data.Items) return reject("gmail-stats::fetchOneByKey::keyNotFound");
+      resolve(data.Items);
+    });
+  });
+};
+
 exports.read = fetchOneByKey;
+exports.readLastDay = dayRangeScan;
