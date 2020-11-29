@@ -1,4 +1,4 @@
-const { read } = require("../dynamo/read");
+const { read, rangeScan } = require("../dynamo/read");
 
 test("Read 1604707200 from DB. I sent and received 10 emails from both categories during this period.", async () => {
   const data = await read("micahtyong@gmail.com", 1604707200);
@@ -37,5 +37,26 @@ test("Read key of invalid type (object) in DB. Catch an error.", async () => {
     await read("", new String("hi"));
   } catch (e) {
     expect(e).toMatch("gmail-stats::fetchOneByKey::invalidInput - object");
+  }
+});
+
+test("Range scan from 1604707200 to 1604710800 for micahtyong@gmail.com", async () => {
+  const data = await rangeScan("micahtyong@gmail.com", 1604707200, 1604710800);
+  expect(data).toStrictEqual({
+    email: "micahtyong@gmail.com",
+    times: [1604707200, 1604710800],
+    toMeFromGmail: [10, 5],
+    toMeFromNonGmail: [10, 2],
+    fromMeToGmail: [10, 3],
+    fromMeToNonGmail: [10, 2],
+  });
+});
+
+test("Range scan where key (email / id) is not found. Catch an error.", async () => {
+  expect.assertions(1);
+  try {
+    await rangeScan("mong@gmil.com", 1604707200, 1604710800);
+  } catch (e) {
+    expect(e).toMatch("gmail-stats::rangeScan::keyNotFound");
   }
 });

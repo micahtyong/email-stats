@@ -57,9 +57,14 @@ const rangeScan = function (email, start, end) {
   return new Promise((resolve, reject) => {
     docClient.query(params, function (err, data) {
       if (err) return reject("gmail-stats::rangeScan::error - " + err);
-      if (!data.Items) return reject("gmail-stats::rangeScan::keyNotFound");
+      if (
+        !data.Items ||
+        data.Items.length === 0 ||
+        !data.Items[0].hasOwnProperty("id")
+      )
+        return reject("gmail-stats::rangeScan::keyNotFound");
       // Step 0: Initialize variables
-      const email = data.Items[0].email || "micahtyong@gmail.com";
+      const email = data.Items[0].id;
       const times = [];
       const toMeFromGmail = [];
       const toMeFromNonGmail = [];
@@ -91,8 +96,3 @@ const rangeScan = function (email, start, end) {
 
 exports.read = fetchOneByKey;
 exports.rangeScan = rangeScan;
-
-exports
-  .rangeScan("micahtyong@gmail.com", 1604707200, 1604710800)
-  .then((res) => console.log(res))
-  .catch((err) => console.log(err));
