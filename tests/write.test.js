@@ -7,10 +7,9 @@ test("Write 1604710800 (11/6/20 5 - 6 PM PST) to DB.", async () => {
     fromMeToGmail: 3,
     isDeleted: false,
     time: 1604710800,
-    email: "micahtyong@gmail.com",
+    id: "micahtyong@gmail.com",
     toMeFromNonGmail: 2,
     fromMeToNonGmail: 2,
-    id: "1604710800",
   };
   const response = await write(input);
   expect(response).toBe("gmail-stats::save::success");
@@ -22,14 +21,13 @@ test("Write then read 1604707200 (11/6/20 4 - 5 PM PST) to DB.", async () => {
     fromMeToGmail: 10,
     isDeleted: false,
     time: 1604707200,
-    email: "micahtyong@gmail.com",
+    id: "micahtyong@gmail.com",
     toMeFromNonGmail: 10,
     fromMeToNonGmail: 10,
-    id: "1604707200",
   };
   const writeResponse = await write(input);
   expect(writeResponse).toBe("gmail-stats::save::success");
-  const readData = await read(1604707200);
+  const readData = await read(input.id, 1604707200);
   expect(readData).toStrictEqual(input);
 });
 
@@ -37,7 +35,7 @@ test("Write without primary or sorted key (id or time). Catch an error.", async 
   expect.assertions(1);
   const badInput = {
     toMeFromGmail: 5,
-    email: "micahtyong@gmail.com",
+    id: "micahtyong@gmail.com",
     fromMeToNonGmail: 2,
   };
   try {
@@ -51,10 +49,9 @@ test("Write with invalid sorted key (string instead of number). Catch an error."
   expect.assertions(1);
   const badInput = {
     toMeFromGmail: 5,
-    email: "micahtyong@gmail.com",
+    id: "micahtyong@gmail.com",
     time: "1604710800",
     fromMeToNonGmail: 2,
-    id: "1604710800",
   };
   try {
     await write(badInput);

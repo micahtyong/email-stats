@@ -15,11 +15,11 @@ const docClient = new AWS.DynamoDB.DocumentClient();
  * Fetches Gmail stats from DB in raw form
  * @param {string} time in Unix (seconds) (stringified)
  */
-const fetchOneByKey = function (time) {
+const fetchOneByKey = function (email, time) {
   const params = {
     TableName: "gmail-stats",
     Key: {
-      id: time.toString(),
+      id: email,
       time: time,
     },
   };
@@ -44,7 +44,7 @@ const fetchOneByKey = function (time) {
 const rangeScan = function (start, end) {
   const params = {
     TableName: "gmail-stats",
-    Limit: 60,
+    KeyConditionExpression: `time BETWEEN :${start} AND :${end}`,
   };
   return new Promise((resolve, reject) => {
     docClient.scan(params, function (err, data) {
@@ -60,12 +60,6 @@ const rangeScan = function (start, end) {
 
       // Step 1: Iterate through Items, filtering, sorting, then extracting
       let items = data.Items;
-      items = items.filter(
-        (item) => parseInt(item.time) >= start && parseInt(item.time) <= end
-      );
-      items.sort(function (a, b) {
-        return parseInt(a.time) - parseInt(b.time);
-      });
       for (gmailItem of items) {
         times.push(gmailItem.time);
         toMeFromGmail.push(gmailItem.toMeFromGmail);
@@ -91,6 +85,6 @@ exports.read = fetchOneByKey;
 exports.rangeScan = rangeScan;
 
 exports
-  .rangeScan(1605157200, 1605420000)
+  .rangeScan(1604710800, 1606622400)
   .then((res) => console.log(res))
   .catch((err) => console.log(err));

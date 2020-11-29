@@ -45,10 +45,9 @@ async function gmailStatsToDB(auth) {
   // 4) Write to DB
   const input = {
     ...emailStats,
-    email: user.emailAddress,
+    id: user.emailAddress,
     isDeleted: false,
     time: pastHour,
-    id: pastHour.toString(),
   };
   write(input)
     .then((res) => console.log(res))
