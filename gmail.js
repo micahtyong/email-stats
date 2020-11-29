@@ -47,7 +47,8 @@ async function gmailStatsToDB(auth) {
     ...emailStats,
     email: user.emailAddress,
     isDeleted: false,
-    time: pastHour.toString(),
+    time: pastHour,
+    id: pastHour.toString(),
   };
   write(input)
     .then((res) => console.log(res))

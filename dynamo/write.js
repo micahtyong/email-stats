@@ -23,7 +23,9 @@ const write = function (input) {
   return new Promise((resolve, reject) => {
     if (!input.hasOwnProperty("time"))
       return reject("gmail-stats::save::inputError - no 'time' attribute");
-    if (!(typeof input.time === "string"))
+    if (!input.hasOwnProperty("id"))
+      return reject("gmail-stats::save::inputError - no 'id' attribute");
+    if (!(typeof input.time === "number"))
       return reject(
         "gmail-stats::save::inputError - 'time' attribute of type " +
           typeof input.time
