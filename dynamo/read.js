@@ -41,13 +41,21 @@ const fetchOneByKey = function (email, time) {
  * Fetches gmail data according to some range
  * Formats for frontend client.
  */
-const rangeScan = function (start, end) {
+const rangeScan = function (email, start, end) {
   const params = {
     TableName: "gmail-stats",
-    KeyConditionExpression: `time BETWEEN :${start} AND :${end}`,
+    KeyConditionExpression: "id = :id AND #t between :start AND :end",
+    ExpressionAttributeNames: {
+      "#t": "time",
+    },
+    ExpressionAttributeValues: {
+      ":id": email,
+      ":start": start,
+      ":end": end,
+    },
   };
   return new Promise((resolve, reject) => {
-    docClient.scan(params, function (err, data) {
+    docClient.query(params, function (err, data) {
       if (err) return reject("gmail-stats::rangeScan::error - " + err);
       if (!data.Items) return reject("gmail-stats::rangeScan::keyNotFound");
       // Step 0: Initialize variables
@@ -85,6 +93,6 @@ exports.read = fetchOneByKey;
 exports.rangeScan = rangeScan;
 
 exports
-  .rangeScan(1604710800, 1606622400)
+  .rangeScan("micahtyong@gmail.com", 1604707200, 1604710800)
   .then((res) => console.log(res))
   .catch((err) => console.log(err));
