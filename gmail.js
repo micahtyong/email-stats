@@ -30,8 +30,10 @@ async function gmailStatsToDB(auth) {
 
   // 1) Collect email keys from the preceding hour
   const pastHour = getLastHour();
-  const rawEmails = await getEmailKeys(auth, ["INBOX"], pastHour);
-  rawEmails.push(...(await getEmailKeys(auth, ["SENT"], pastHour)));
+  const rawEmails = [
+    ...(await getEmailKeys(auth, ["INBOX"], pastHour)),
+    ...(await getEmailKeys(auth, ["SENT"], pastHour)),
+  ];
 
   // 2) Format emails
   const emails = await getParsedEmails(auth, rawEmails);
@@ -47,6 +49,7 @@ async function gmailStatsToDB(auth) {
     time: pastHour,
   };
   await dynamoWrite(input);
+  console.log(input);
   return input;
 }
 
@@ -101,7 +104,8 @@ async function getEmailStats(user, emails) {
 /**
  * Determines whether email domain is managed by Google.
  * 1) Extract domain name
- * 2) Execute shell child process to check host (@source: https://stackabuse.com/executing-shell-commands-with-node-js/)
+ * 2) Execute shell child process to check host
+ * @source for shell process: https://stackabuse.com/executing-shell-commands-with-node-js/
  * @param {string} emailAddress
  *
  * ex) team@calblueprint.org => true
@@ -147,6 +151,7 @@ async function authorize(credentials) {
 /**
  * Get and store new token after prompting for user authorization.
  * Store the token to disk for later program executions.
+ * @source for async reads: https://stackoverflow.com/questions/43638105/how-to-get-synchronous-readline-or-simulate-it-using-async-in-nodejs
  * @param {google.auth.OAuth2} oAuth2Client The OAuth2 client to get token for.
  */
 async function getNewToken(oAuth2Client) {
@@ -165,72 +170,55 @@ async function getNewToken(oAuth2Client) {
  * Returns user profile information based on authorized client.
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function getProfile(auth) {
+async function getProfile(auth) {
   const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.getProfile(
-      {
-        userId: "me",
-      },
-      (err, res) => {
-        if (err)
-          return reject(
-            "The API returned an error while fetching user: " + err
-          );
-        resolve(res.data);
-      }
-    );
-  });
+  try {
+    const res = await gmail.users.getProfile({
+      userId: "me",
+    });
+    return res.data;
+  } catch (err) {
+    throw "The API returned an error while fetching user: " + err;
+  }
 }
 
 /**
  * Lists the labels in the user's account.
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function getLabels(auth) {
+async function getLabels(auth) {
   const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.labels.list(
-      {
-        userId: "me",
-      },
-      (err, res) => {
-        if (err) return reject("The API returned an error " + err);
-        const labels = res.data.labels;
-        if (labels) {
-          resolve(labels);
-        } else {
-          resolve([]);
-        }
-      }
-    );
-  });
+  try {
+    const res = gmail.users.labels.list({
+      userId: "me",
+    });
+    return res.data.labels;
+  } catch (err) {
+    throw "The API returned an error: " + err;
+  }
 }
 
 /**
  * Fetches received messages in the user's account.
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function getEmailKeys(auth, labels, hourAgo) {
+async function getEmailKeys(auth, labels, hourAgo) {
   const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.messages.list(
-      {
-        userId: "me",
-        q: `after:${hourAgo}`,
-        labelIds: labels,
-      },
-      (err, res) => {
-        if (err) return reject("The API returned an error " + err);
-        const messages = res.data.messages;
-        if (messages) {
-          resolve(messages);
-        } else {
-          resolve([]);
-        }
-      }
-    );
-  });
+  try {
+    const res = await gmail.users.messages.list({
+      userId: "me",
+      q: `after:${hourAgo}`,
+      labelIds: labels,
+    });
+    const msgs = res.data.messages;
+    if (msgs) {
+      return msgs;
+    } else {
+      return [];
+    }
+  } catch (err) {
+    throw "The API returned an error: " + err;
+  }
 }
 
 /**
@@ -238,17 +226,15 @@ function getEmailKeys(auth, labels, hourAgo) {
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  * @param {gmail_v1.Schema$Message} rawEmails A list of raw emails retrieved from Gmail API client.
  */
-function getParsedEmails(auth, rawEmails) {
+async function getParsedEmails(auth, rawEmails) {
   const emails = [];
-  return new Promise(async (resolve) => {
-    if (rawEmails.length) {
-      for (const rawEmail of rawEmails) {
-        const email = await parseEmail(auth, rawEmail);
-        emails.push(email);
-      }
+  if (rawEmails.length) {
+    for (const rawEmail of rawEmails) {
+      const email = await parseEmail(auth, rawEmail);
+      emails.push(email);
     }
-    resolve(emails);
-  });
+  }
+  return emails;
 }
 
 /**
@@ -257,42 +243,39 @@ function getParsedEmails(auth, rawEmails) {
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  * @param {gmail_v1.Schema$Message} rawEmail A raw email retrieved from Gmail API client.
  */
-function parseEmail(auth, rawEmail) {
+async function parseEmail(auth, rawEmail) {
   const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.messages.get(
-      {
-        userId: "me",
-        id: rawEmail["id"],
-      },
-      (err, res) => {
-        if (err) return reject("The email is invalid: " + err);
-        const email = {
-          id: res.data.id,
-          snippet: res.data.snippet,
-          labelIds: res.data.labelIds,
-        };
-        const headers = res.data.payload.headers;
-        headers.forEach((header) => {
-          switch (header.name) {
-            case "Date":
-              email["date"] = header.value;
-              break;
-            case "Subject":
-              email["subject"] = header.value;
-              break;
-            case "From":
-              email["from"] = header.value;
-              break;
-            case "To":
-              email["to"] = header.value;
-              break;
-          }
-        });
-        resolve(email);
+  try {
+    const res = await gmail.users.messages.get({
+      userId: "me",
+      id: rawEmail["id"],
+    });
+    const email = {
+      id: res.data.id,
+      snippet: res.data.snippet,
+      labelIds: res.data.labelIds,
+    };
+    const headers = res.data.payload.headers;
+    headers.forEach((header) => {
+      switch (header.name) {
+        case "Date":
+          email["date"] = header.value;
+          break;
+        case "Subject":
+          email["subject"] = header.value;
+          break;
+        case "From":
+          email["from"] = header.value;
+          break;
+        case "To":
+          email["to"] = header.value;
+          break;
       }
-    );
-  });
+    });
+    return email;
+  } catch (err) {
+    throw "The email is invalid: " + err;
+  }
 }
 
 exports.handler();
