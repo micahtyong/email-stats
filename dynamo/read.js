@@ -71,7 +71,7 @@ const rangeScan = function (email, start, end) {
       const fromMeToGmail = [];
       const fromMeToNonGmail = [];
 
-      // Step 1: Iterate through Items, filtering, sorting, then extracting
+      // Step 1: Extract
       let items = data.Items;
       for (gmailItem of items) {
         times.push(gmailItem.time);
@@ -96,3 +96,8 @@ const rangeScan = function (email, start, end) {
 
 exports.read = fetchOneByKey;
 exports.rangeScan = rangeScan;
+
+exports
+  .rangeScan("micahtyong@gmail.com", 1604707200, 1606676400)
+  .then((res) => console.log(res))
+  .catch((err) => console.err(err));
