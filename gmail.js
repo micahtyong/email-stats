@@ -3,7 +3,6 @@ const fs = require("fs").promises;
 const readline = require("readline-sync");
 const { google } = require("googleapis");
 const Verifier = require("email-verifier");
-const { exec } = require("child_process");
 const { write: dynamoWrite } = require("./dynamo/write");
 const dotenv = require("dotenv");
 dotenv.config();
@@ -161,9 +160,13 @@ async function getNewToken(oAuth2Client) {
   });
   console.log("Authorize this app by visiting this url:", authUrl);
   const code = readline.question("Enter the code from that page here: ");
-  const { tokens } = await oAuth2Client.getToken(code);
-  await fs.writeFile(TOKEN_PATH, JSON.stringify(tokens));
-  return JSON.stringify(tokens);
+  try {
+    const { tokens } = await oAuth2Client.getToken(code);
+    await fs.writeFile(TOKEN_PATH, JSON.stringify(tokens));
+    return JSON.stringify(tokens);
+  } catch (err) {
+    throw err;
+  }
 }
 
 /**
