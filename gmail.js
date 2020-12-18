@@ -2,8 +2,11 @@
 const fs = require("fs").promises;
 const readline = require("readline-sync");
 const { google } = require("googleapis");
+const Verifier = require("email-verifier");
 const { exec } = require("child_process");
 const { write: dynamoWrite } = require("./dynamo/write");
+const dotenv = require("dotenv");
+dotenv.config();
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
@@ -103,9 +106,7 @@ async function getEmailStats(user, emails) {
 
 /**
  * Determines whether email domain is managed by Google.
- * 1) Extract domain name
- * 2) Execute shell child process to check host
- * @source for shell process: https://stackabuse.com/executing-shell-commands-with-node-js/
+ * @source for email verifier package (no Promise support): https://www.npmjs.com/package/email-verifier
  * @param {string} emailAddress
  *
  * ex) team@calblueprint.org => true
@@ -113,15 +114,14 @@ async function getEmailStats(user, emails) {
  * reject(`stderr: ${stderr}`)
  */
 function isGmailHosted(emailAddress) {
-  const domain = emailAddress.match(/(?<=@)[^.]+(.(\w+))*/g);
-  return new Promise((resolve) => {
-    if (domain.length) {
-      exec(`host ${domain[0]}`, (error, stdout, stderr) => {
-        if (error) resolve(false);
-        if (stderr) resolve(false);
-        resolve(stdout.includes("google.com"));
-      });
-    }
+  const verifier = new Verifier(process.env.AWS_EMAIL_VERIFICATION_KEY);
+  return new Promise((resolve, reject) => {
+    verifier.verify(emailAddress, (err, data) => {
+      if (err) reject(err);
+      resolve(
+        data.mxRecords.length > 0 && data.mxRecords[0].includes("google.com")
+      );
+    });
   });
 }
 
