@@ -14,21 +14,22 @@ const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 // time.
 const TOKEN_PATH = "./token.json";
 
-exports.handler = async () => {
+async function main() {
   const credentials = await fs.readFile("./credentials.json");
   const authToken = await authorize(JSON.parse(credentials));
-  const stats = await gmailStatsToDB(authToken);
-  return stats;
-};
+  const res = await gmailStatsToDB(authToken);
+  return res;
+}
 
 /**
- * Main Lambda function
+ * Main Lambda function after authentication
  *
  * @param {google.auth.OAuth2} auth
  */
 async function gmailStatsToDB(auth) {
   // 0) Get user profile information
   const user = await getProfile(auth);
+  console.log(user);
 
   // 1) Collect email keys from the preceding hour
   const pastHour = getLastHour();
@@ -50,9 +51,7 @@ async function gmailStatsToDB(auth) {
     isDeleted: false,
     time: pastHour,
   };
-  await dynamoWrite(input);
-  console.log(input);
-  return input;
+  return await dynamoWrite(input);
 }
 
 /**
@@ -75,6 +74,7 @@ function getLastHour() {
  * (d) sent from:you to:non-gmail-users)
  * @param {User} user .emailAddress gets the user's email address.
  * @param {Email[]} emails
+ *
  */
 async function getEmailStats(user, emails) {
   const stats = {
@@ -105,20 +105,25 @@ async function getEmailStats(user, emails) {
 
 /**
  * Determines whether email domain is managed by Google.
- * @source for email verifier package (no Promise support): https://www.npmjs.com/package/email-verifier
+ * @source for email-verifier: https://www.npmjs.com/package/email-verifier.
  * @param {string} emailAddress
  *
  * ex) team@calblueprint.org => true
  * reject(`error: ${error.message}`)
  * reject(`stderr: ${stderr}`)
+ *
+ * note: email-verifier 1) has no Promise support and 2) a rate limit of 10/second
  */
 function isGmailHosted(emailAddress) {
   const verifier = new Verifier(process.env.AWS_EMAIL_VERIFICATION_KEY);
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     verifier.verify(emailAddress, (err, data) => {
-      if (err) reject(err);
+      if (err) resolve(false);
       resolve(
-        data.mxRecords.length > 0 && data.mxRecords[0].includes("google.com")
+        data &&
+          data.mxRecords &&
+          data.mxRecords.length > 0 &&
+          data.mxRecords[0].includes("google.com")
       );
     });
   });
@@ -281,4 +286,5 @@ async function parseEmail(auth, rawEmail) {
   }
 }
 
+exports.handler = main;
 exports.handler();

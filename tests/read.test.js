@@ -14,7 +14,6 @@ test("Read 1604707200 from DB. I sent and received 10 emails from both categorie
 });
 
 test("Read non-existent key from DB. Catch an error.", async () => {
-  expect.assertions(1);
   try {
     await read("micahtyong@gmail.com", 100);
   } catch (e) {
@@ -23,7 +22,6 @@ test("Read non-existent key from DB. Catch an error.", async () => {
 });
 
 test("Read key of invalid type (string) in DB. Catch an error.", async () => {
-  expect.assertions(1);
   try {
     await read("micahtyong@gmail.com", "500");
   } catch (e) {
@@ -32,7 +30,6 @@ test("Read key of invalid type (string) in DB. Catch an error.", async () => {
 });
 
 test("Read key of invalid type (object) in DB. Catch an error.", async () => {
-  expect.assertions(1);
   try {
     await read("", new String("hi"));
   } catch (e) {
@@ -53,7 +50,6 @@ test("Range scan from 1604707200 to 1604710800 for micahtyong@gmail.com", async 
 });
 
 test("Range scan where key (email / id) is not found. Catch an error.", async () => {
-  expect.assertions(1);
   try {
     await rangeScan("mong@gmil.com", 1604707200, 1604710800);
   } catch (e) {

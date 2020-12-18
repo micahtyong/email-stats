@@ -15,26 +15,26 @@ const docClient = new AWS.DynamoDB.DocumentClient();
  * Adds or updates DB with new Gmail stats
  * @param {Stats} input Gmail stats object
  */
-const write = function (input) {
+const write = async function (input) {
+  if (!input.hasOwnProperty("time"))
+    throw "gmail-stats::save::inputError - no 'time' attribute";
+  if (!input.hasOwnProperty("id"))
+    throw "gmail-stats::save::inputError - no 'id' attribute";
+  if (!(typeof input.time === "number"))
+    throw (
+      "gmail-stats::save::inputError - 'time' attribute of type " +
+      typeof input.time
+    );
   const params = {
     TableName: "gmail-stats",
     Item: input,
   };
-  return new Promise((resolve, reject) => {
-    if (!input.hasOwnProperty("time"))
-      return reject("gmail-stats::save::inputError - no 'time' attribute");
-    if (!input.hasOwnProperty("id"))
-      return reject("gmail-stats::save::inputError - no 'id' attribute");
-    if (!(typeof input.time === "number"))
-      return reject(
-        "gmail-stats::save::inputError - 'time' attribute of type " +
-          typeof input.time
-      );
-    docClient.put(params, function (err) {
-      if (err) reject("gmail-stats::save::error - " + err);
-      resolve("gmail-stats::save::success");
-    });
-  });
+  try {
+    await docClient.put(params).promise();
+    return "gmail-stats::save::success";
+  } catch (err) {
+    throw "gmail-stats::save::error - " + err;
+  }
 };
 
 exports.write = write;
