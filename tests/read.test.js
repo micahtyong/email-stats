@@ -17,7 +17,9 @@ test("Read non-existent key from DB. Catch an error.", async () => {
   try {
     await read("micahtyong@gmail.com", 100);
   } catch (e) {
-    expect(e).toMatch("gmail-stats::fetchOneByKey::keyNotFound");
+    expect(e).toMatchObject(
+      new Error("gmail-stats::fetchOneByKey::keyNotFound")
+    );
   }
 });
 
@@ -25,7 +27,9 @@ test("Read key of invalid type (string) in DB. Catch an error.", async () => {
   try {
     await read("micahtyong@gmail.com", "500");
   } catch (e) {
-    expect(e).toMatch("gmail-stats::fetchOneByKey::invalidInput - string");
+    expect(e).toMatchObject(
+      new Error("gmail-stats::fetchOneByKey::invalidInput - string")
+    );
   }
 });
 
@@ -33,7 +37,9 @@ test("Read key of invalid type (object) in DB. Catch an error.", async () => {
   try {
     await read("", new String("hi"));
   } catch (e) {
-    expect(e).toMatch("gmail-stats::fetchOneByKey::invalidInput - object");
+    expect(e).toMatchObject(
+      new Error("gmail-stats::fetchOneByKey::invalidInput - object")
+    );
   }
 });
 
@@ -53,6 +59,6 @@ test("Range scan where key (email / id) is not found. Catch an error.", async ()
   try {
     await rangeScan("mong@gmil.com", 1604707200, 1604710800);
   } catch (e) {
-    expect(e).toMatch("gmail-stats::rangeScan::keyNotFound");
+    expect(e).toMatchObject(new Error("gmail-stats::rangeScan::keyNotFound"));
   }
 });

@@ -17,13 +17,13 @@ const docClient = new AWS.DynamoDB.DocumentClient();
  */
 const write = async function (input) {
   if (!input.hasOwnProperty("time"))
-    throw "gmail-stats::save::inputError - no 'time' attribute";
+    throw new Error("gmail-stats::save::inputError - no 'time' attribute");
   if (!input.hasOwnProperty("id"))
-    throw "gmail-stats::save::inputError - no 'id' attribute";
+    throw new Error("gmail-stats::save::inputError - no 'id' attribute");
   if (!(typeof input.time === "number"))
-    throw (
+    throw new Error(
       "gmail-stats::save::inputError - 'time' attribute of type " +
-      typeof input.time
+        typeof input.time
     );
   const params = {
     TableName: "gmail-stats",
@@ -33,7 +33,7 @@ const write = async function (input) {
     await docClient.put(params).promise();
     return "gmail-stats::save::success";
   } catch (err) {
-    throw "gmail-stats::save::error - " + err;
+    throw err;
   }
 };
 

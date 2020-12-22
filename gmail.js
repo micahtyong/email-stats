@@ -2,6 +2,7 @@
 const fs = require("fs").promises;
 const readline = require("readline-sync");
 const { google } = require("googleapis");
+const Promise = require("bluebird");
 const Verifier = require("email-verifier");
 const { write: dynamoWrite } = require("./dynamo/write");
 const dotenv = require("dotenv");
@@ -29,7 +30,6 @@ async function main() {
 async function gmailStatsToDB(auth) {
   // 0) Get user profile information
   const user = await getProfile(auth);
-  console.log(user);
 
   // 1) Collect email keys from the preceding hour
   const pastHour = getLastHour();
@@ -39,7 +39,9 @@ async function gmailStatsToDB(auth) {
   ];
 
   // 2) Format emails
-  const emails = await getParsedEmails(auth, rawEmails);
+  const emails = await Promise.map(rawEmails, (email) =>
+    parseEmail(auth, email)
+  );
 
   // 3) Extract metrics from emails
   const emailStats = await getEmailStats(user, emails);
@@ -144,11 +146,11 @@ async function authorize(credentials) {
 
   let token;
   try {
-    token = await fs.readFile(TOKEN_PATH);
+    token = JSON.parse(await fs.readFile(TOKEN_PATH));
   } catch (err) {
-    token = await getNewToken(oAuth2Client);
+    token = JSON.parse(await getNewToken(oAuth2Client));
   }
-  oAuth2Client.setCredentials(JSON.parse(token));
+  oAuth2Client.setCredentials(token);
   return oAuth2Client;
 }
 
@@ -166,9 +168,10 @@ async function getNewToken(oAuth2Client) {
   console.log("Authorize this app by visiting this url:", authUrl);
   const code = readline.question("Enter the code from that page here: ");
   try {
-    const { tokens } = await oAuth2Client.getToken(code);
-    await fs.writeFile(TOKEN_PATH, JSON.stringify(tokens));
-    return JSON.stringify(tokens);
+    let { tokens } = await oAuth2Client.getToken(code);
+    tokens = JSON.stringify(tokens);
+    await fs.writeFile(TOKEN_PATH, tokens);
+    return tokens;
   } catch (err) {
     throw err;
   }
@@ -187,22 +190,6 @@ async function getProfile(auth) {
     return res.data;
   } catch (err) {
     throw "The API returned an error while fetching user: " + err;
-  }
-}
-
-/**
- * Lists the labels in the user's account.
- * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
- */
-async function getLabels(auth) {
-  const gmail = google.gmail({ version: "v1", auth });
-  try {
-    const res = gmail.users.labels.list({
-      userId: "me",
-    });
-    return res.data.labels;
-  } catch (err) {
-    throw "The API returned an error: " + err;
   }
 }
 
@@ -227,22 +214,6 @@ async function getEmailKeys(auth, labels, hourAgo) {
   } catch (err) {
     throw "The API returned an error: " + err;
   }
-}
-
-/**
- * Process raw emails and returning parsed emails.
- * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
- * @param {gmail_v1.Schema$Message} rawEmails A list of raw emails retrieved from Gmail API client.
- */
-async function getParsedEmails(auth, rawEmails) {
-  const emails = [];
-  if (rawEmails.length) {
-    for (const rawEmail of rawEmails) {
-      const email = await parseEmail(auth, rawEmail);
-      emails.push(email);
-    }
-  }
-  return emails;
 }
 
 /**

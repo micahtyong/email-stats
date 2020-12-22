@@ -17,7 +17,9 @@ const docClient = new AWS.DynamoDB.DocumentClient();
  */
 const fetchOneByKey = async function (email, time) {
   if (typeof time !== "number")
-    throw "gmail-stats::fetchOneByKey::invalidInput - " + typeof time;
+    throw new Error(
+      "gmail-stats::fetchOneByKey::invalidInput - " + typeof time
+    );
   const params = {
     TableName: "gmail-stats",
     Key: {
@@ -27,10 +29,9 @@ const fetchOneByKey = async function (email, time) {
   };
   try {
     const data = await docClient.get(params).promise();
-    if (!data.Item) throw "gmail-stats::fetchOneByKey::keyNotFound";
     return data.Item;
   } catch (err) {
-    throw "gmail-stats::fetchOneByKey::error - " + err;
+    throw err;
   }
 };
 
@@ -58,7 +59,7 @@ const rangeScan = async function (email, start, end) {
       data.Items.length === 0 ||
       !data.Items[0].hasOwnProperty("id")
     )
-      throw "gmail-stats::rangeScan::keyNotFound";
+      throw new Error("gmail-stats::rangeScan::keyNotFound");
 
     // Step 0: Initialize variables
     const email = data.Items[0].id;
@@ -88,14 +89,9 @@ const rangeScan = async function (email, start, end) {
       fromMeToNonGmail,
     };
   } catch (err) {
-    throw "gmail-stats::rangeScan::error - " + err;
+    throw err;
   }
 };
 
 exports.read = fetchOneByKey;
 exports.rangeScan = rangeScan;
-
-exports
-  .rangeScan("micahtyong@gmail.com", 1604707200, 1606676400)
-  .then((res) => console.log(res))
-  .catch((err) => console.err(err));
