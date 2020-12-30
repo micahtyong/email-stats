@@ -1,29 +1,29 @@
 "use strict";
-const fs = require("fs");
-const readline = require("readline");
+const fs = require("fs").promises;
+const readline = require("readline-sync");
 const { google } = require("googleapis");
-const { exec } = require("child_process");
-const { write } = require(__dirname + "/dynamo/write");
+const Promise = require("bluebird");
+const Verifier = require("email-verifier");
+const { write: dynamoWrite } = require("./dynamo/write");
+const dotenv = require("dotenv");
+dotenv.config();
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"];
 // The file token.json stores the user's access and refresh tokens, and is
 // created automatically when the authorization flow completes for the first
 // time.
-const TOKEN_PATH = __dirname + "/token.json";
+const TOKEN_PATH = "./token.json";
 
-exports.handler = () => {
-  // Load client secrets from a local file.
-  fs.readFile(__dirname + "/credentials.json", (err, content) => {
-    if (err) return console.log("Error loading client secret file:", err);
-    // Authorize a client with credentials, then call the Gmail API.
-    authorize(JSON.parse(content), gmailStatsToDB);
-    return true;
-  });
-};
+async function main() {
+  const credentials = await fs.readFile("./credentials.json");
+  const authToken = await authorize(JSON.parse(credentials));
+  const res = await gmailStatsToDB(authToken);
+  return res;
+}
 
 /**
- * Main Lambda function
+ * Main Lambda function after authentication
  *
  * @param {google.auth.OAuth2} auth
  */
@@ -33,11 +33,15 @@ async function gmailStatsToDB(auth) {
 
   // 1) Collect email keys from the preceding hour
   const pastHour = getLastHour();
-  const rawEmails = await getEmailKeys(auth, ["INBOX"], pastHour);
-  rawEmails.push(...(await getEmailKeys(auth, ["SENT"], pastHour)));
+  const rawEmails = [
+    ...(await getEmailKeys(auth, ["INBOX"], pastHour)),
+    ...(await getEmailKeys(auth, ["SENT"], pastHour)),
+  ];
 
   // 2) Format emails
-  const emails = await getParsedEmails(auth, rawEmails);
+  const emails = await Promise.map(rawEmails, (email) =>
+    parseEmail(auth, email)
+  );
 
   // 3) Extract metrics from emails
   const emailStats = await getEmailStats(user, emails);
@@ -49,9 +53,7 @@ async function gmailStatsToDB(auth) {
     isDeleted: false,
     time: pastHour,
   };
-  write(input)
-    .then((res) => console.log(res))
-    .catch((e) => console.log(e));
+  return await dynamoWrite(input);
 }
 
 /**
@@ -74,6 +76,7 @@ function getLastHour() {
  * (d) sent from:you to:non-gmail-users)
  * @param {User} user .emailAddress gets the user's email address.
  * @param {Email[]} emails
+ *
  */
 async function getEmailStats(user, emails) {
   const stats = {
@@ -104,34 +107,36 @@ async function getEmailStats(user, emails) {
 
 /**
  * Determines whether email domain is managed by Google.
- * 1) Extract domain name
- * 2) Execute shell child process to check host (@source: https://stackabuse.com/executing-shell-commands-with-node-js/)
+ * @source for email-verifier: https://www.npmjs.com/package/email-verifier.
  * @param {string} emailAddress
  *
  * ex) team@calblueprint.org => true
  * reject(`error: ${error.message}`)
  * reject(`stderr: ${stderr}`)
+ *
+ * note: email-verifier 1) has no Promise support and 2) a rate limit of 10/second
  */
 function isGmailHosted(emailAddress) {
-  const domain = emailAddress.match(/(?<=@)[^.]+(.(\w+))*/g);
+  const verifier = new Verifier(process.env.AWS_EMAIL_VERIFICATION_KEY);
   return new Promise((resolve) => {
-    if (domain.length) {
-      exec(`host ${domain[0]}`, (error, stdout, stderr) => {
-        if (error) resolve(false);
-        if (stderr) resolve(false);
-        resolve(stdout.includes("google.com"));
-      });
-    }
+    verifier.verify(emailAddress, (err, data) => {
+      if (err) resolve(false);
+      resolve(
+        data &&
+          data.mxRecords &&
+          data.mxRecords.length > 0 &&
+          data.mxRecords[0].includes("google.com")
+      );
+    });
   });
 }
 
 /**
- * Create an OAuth2 client with the given credentials, and then execute the
- * given callback function.
+ * Create an OAuth2 client with the given credentials.
  * @param {Object} credentials The authorization client credentials.
- * @param {function} callback The callback to call with the authorized client.
+ * @returns {google.auth.OAuth2} The OAuth2 client to run subsequent calls to Gmail API.
  */
-function authorize(credentials, callback) {
+async function authorize(credentials) {
   const { client_secret, client_id, redirect_uris } = credentials.installed;
   const oAuth2Client = new google.auth.OAuth2(
     client_id,
@@ -139,137 +144,76 @@ function authorize(credentials, callback) {
     redirect_uris[0]
   );
 
-  // Check if we have previously stored a token.
-  fs.readFile(TOKEN_PATH, (err, token) => {
-    if (err) return getNewToken(oAuth2Client, callback);
-    oAuth2Client.setCredentials(JSON.parse(token));
-    callback(oAuth2Client);
-  });
+  let token;
+  try {
+    token = JSON.parse(await fs.readFile(TOKEN_PATH));
+  } catch (err) {
+    token = JSON.parse(await getNewToken(oAuth2Client));
+  }
+  oAuth2Client.setCredentials(token);
+  return oAuth2Client;
 }
 
 /**
- * Get and store new token after prompting for user authorization, and then
- * execute the given callback with the authorized OAuth2 client.
+ * Get and store new token after prompting for user authorization.
+ * Store the token to disk for later program executions.
+ * @source for async reads: https://stackoverflow.com/questions/43638105/how-to-get-synchronous-readline-or-simulate-it-using-async-in-nodejs
  * @param {google.auth.OAuth2} oAuth2Client The OAuth2 client to get token for.
- * @param {getEventsCallback} callback The callback for the authorized client.
  */
-function getNewToken(oAuth2Client, callback) {
+async function getNewToken(oAuth2Client) {
   const authUrl = oAuth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
   });
   console.log("Authorize this app by visiting this url:", authUrl);
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  rl.question("Enter the code from that page here: ", (code) => {
-    rl.close();
-    oAuth2Client.getToken(code, (err, token) => {
-      if (err) return console.error("Error retrieving access token", err);
-      oAuth2Client.setCredentials(token);
-      // Store the token to disk for later program executions
-      fs.writeFile(TOKEN_PATH, JSON.stringify(token), (err) => {
-        if (err) return console.error(err);
-        console.log("Token stored to", TOKEN_PATH);
-      });
-      callback(oAuth2Client);
-    });
-  });
+  const code = readline.question("Enter the code from that page here: ");
+  try {
+    let { tokens } = await oAuth2Client.getToken(code);
+    tokens = JSON.stringify(tokens);
+    await fs.writeFile(TOKEN_PATH, tokens);
+    return tokens;
+  } catch (err) {
+    throw err;
+  }
 }
 
 /**
  * Returns user profile information based on authorized client.
- *
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function getProfile(auth) {
+async function getProfile(auth) {
   const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.getProfile(
-      {
-        userId: "me",
-      },
-      (err, res) => {
-        if (err)
-          return reject(
-            "The API returned an error while fetching user: " + err
-          );
-        resolve(res.data);
-      }
-    );
-  });
-}
-
-/**
- * Lists the labels in the user's account.
- *
- * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
- */
-function getLabels(auth) {
-  const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.labels.list(
-      {
-        userId: "me",
-      },
-      (err, res) => {
-        if (err) return reject("The API returned an error " + err);
-        const labels = res.data.labels;
-        if (labels) {
-          resolve(labels);
-        } else {
-          resolve([]);
-        }
-      }
-    );
-  });
+  try {
+    const res = await gmail.users.getProfile({
+      userId: "me",
+    });
+    return res.data;
+  } catch (err) {
+    throw "The API returned an error while fetching user: " + err;
+  }
 }
 
 /**
  * Fetches received messages in the user's account.
- *
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  */
-function getEmailKeys(auth, labels, hourAgo) {
+async function getEmailKeys(auth, labels, hourAgo) {
   const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.messages.list(
-      {
-        userId: "me",
-        q: `after:${hourAgo}`,
-        labelIds: labels,
-      },
-      (err, res) => {
-        if (err) return reject("The API returned an error " + err);
-        const messages = res.data.messages;
-        if (messages) {
-          resolve(messages);
-        } else {
-          resolve([]);
-        }
-      }
-    );
-  });
-}
-
-/**
- * Process raw emails and returning parsed emails.
- *
- * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
- * @param {gmail_v1.Schema$Message} rawEmails A list of raw emails retrieved from Gmail API client.
- */
-function getParsedEmails(auth, rawEmails) {
-  const emails = [];
-  return new Promise(async (resolve) => {
-    if (rawEmails.length) {
-      for (const rawEmail of rawEmails) {
-        const email = await parseEmail(auth, rawEmail);
-        emails.push(email);
-      }
+  try {
+    const res = await gmail.users.messages.list({
+      userId: "me",
+      q: `after:${hourAgo}`,
+      labelIds: labels,
+    });
+    const msgs = res.data.messages;
+    if (msgs) {
+      return msgs;
+    } else {
+      return [];
     }
-    resolve(emails);
-  });
+  } catch (err) {
+    throw "The API returned an error: " + err;
+  }
 }
 
 /**
@@ -278,42 +222,40 @@ function getParsedEmails(auth, rawEmails) {
  * @param {google.auth.OAuth2} auth An authorized OAuth2 client.
  * @param {gmail_v1.Schema$Message} rawEmail A raw email retrieved from Gmail API client.
  */
-function parseEmail(auth, rawEmail) {
+async function parseEmail(auth, rawEmail) {
   const gmail = google.gmail({ version: "v1", auth });
-  return new Promise((resolve, reject) => {
-    gmail.users.messages.get(
-      {
-        userId: "me",
-        id: rawEmail["id"],
-      },
-      (err, res) => {
-        if (err) return reject("The email is invalid: " + err);
-        const email = {
-          id: res.data.id,
-          snippet: res.data.snippet,
-          labelIds: res.data.labelIds,
-        };
-        const headers = res.data.payload.headers;
-        headers.forEach((header) => {
-          switch (header.name) {
-            case "Date":
-              email["date"] = header.value;
-              break;
-            case "Subject":
-              email["subject"] = header.value;
-              break;
-            case "From":
-              email["from"] = header.value;
-              break;
-            case "To":
-              email["to"] = header.value;
-              break;
-          }
-        });
-        resolve(email);
+  try {
+    const res = await gmail.users.messages.get({
+      userId: "me",
+      id: rawEmail["id"],
+    });
+    const email = {
+      id: res.data.id,
+      snippet: res.data.snippet,
+      labelIds: res.data.labelIds,
+    };
+    const headers = res.data.payload.headers;
+    headers.forEach((header) => {
+      switch (header.name) {
+        case "Date":
+          email["date"] = header.value;
+          break;
+        case "Subject":
+          email["subject"] = header.value;
+          break;
+        case "From":
+          email["from"] = header.value;
+          break;
+        case "To":
+          email["to"] = header.value;
+          break;
       }
-    );
-  });
+    });
+    return email;
+  } catch (err) {
+    throw "The email is invalid: " + err;
+  }
 }
 
+exports.handler = main;
 exports.handler();

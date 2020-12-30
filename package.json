@@ -10,9 +10,13 @@
   "author": "Micah Yong",
   "license": "ISC",
   "dependencies": {
+    "await-to-js": "^2.1.1",
     "aws-sdk": "^2.787.0",
+    "bluebird": "^3.7.2",
     "dotenv": "^8.2.0",
+    "email-verifier": "^0.4.1",
     "googleapis": "^39.2.0",
+    "readline-sync": "^1.4.10",
     "typescript": "^4.0.5"
   },
   "devDependencies": {

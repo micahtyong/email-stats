@@ -32,7 +32,6 @@ test("Write then read 1604707200 (11/6/20 4 - 5 PM PST) to DB.", async () => {
 });
 
 test("Write without primary or sorted key (id or time). Catch an error.", async () => {
-  expect.assertions(1);
   const badInput = {
     toMeFromGmail: 5,
     id: "micahtyong@gmail.com",
@@ -41,12 +40,13 @@ test("Write without primary or sorted key (id or time). Catch an error.", async 
   try {
     await write(badInput);
   } catch (e) {
-    expect(e).toBe("gmail-stats::save::inputError - no 'time' attribute");
+    expect(e).toMatchObject(
+      new Error("gmail-stats::save::inputError - no 'time' attribute")
+    );
   }
 });
 
 test("Write with invalid sorted key (string instead of number). Catch an error.", async () => {
-  expect.assertions(1);
   const badInput = {
     toMeFromGmail: 5,
     id: "micahtyong@gmail.com",
@@ -56,8 +56,10 @@ test("Write with invalid sorted key (string instead of number). Catch an error."
   try {
     await write(badInput);
   } catch (e) {
-    expect(e).toBe(
-      "gmail-stats::save::inputError - 'time' attribute of type string"
+    expect(e).toMatchObject(
+      new Error(
+        "gmail-stats::save::inputError - 'time' attribute of type string"
+      )
     );
   }
 });
