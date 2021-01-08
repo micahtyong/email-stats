@@ -2,6 +2,8 @@
 
 Scheduled lambda to collect basic email stats via Google's Gmail API. This repository can be used as a template for backend tasks that 1) communicate with an external source via API (e.g. gmail, twitter), and 2) stores data in a backend with basic CRUD functions set up. 
 
+See frontend client [here](https://github.com/micahtyong/email-stats). 
+
 # Getting Started 
 
 1. Clone this repository and run `npm i`. 
